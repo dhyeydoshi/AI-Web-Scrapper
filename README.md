@@ -48,7 +48,7 @@ pip install -r requirements.txt
 
 ### 4. Run the Application
 ```bash
-python draft2.py
+python app.py
 ```
 Navigate to `http://127.0.0.1:5000` in your browser to access the application.
 
@@ -63,7 +63,7 @@ Navigate to `http://127.0.0.1:5000` in your browser to access the application.
 │   └── style.css           # CSS for styling the front-end
 ├── templates
 │   └── index.html          # HTML template for the main UI
-├── draft2.py               # Flask application with scraping and sentiment analysis logic
+├── app.py               # Flask application with scraping and sentiment analysis logic
 ├── requirements.txt        # Required Python libraries
 └── README.md               # Project documentation
 ```
@@ -71,7 +71,7 @@ Navigate to `http://127.0.0.1:5000` in your browser to access the application.
 ### File Overview:
 - **index.html**: Front-end template that includes the input form and visual layout of the application.
 - **style.css**: The stylesheet that adds modern, aesthetic styling to the webpage, such as gradients and animations.
-- **draft2.py**: Main application logic for web scraping, sentiment analysis, and file generation.
+- **app.py**: Main application logic for web scraping, sentiment analysis, and file generation.
 - **requirements.txt**: Lists all the dependencies used in this project (Flask, BeautifulSoup, aiohttp, etc.).
 
 ## Contributing
