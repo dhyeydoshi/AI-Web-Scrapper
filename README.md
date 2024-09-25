@@ -1,6 +1,6 @@
 # ReviewPal
 
-**ReviewPal** is a handy web scraping tool designed to make it easier to gather and analyze product information from Amazon. Using Flask, this tool lets you collect customer reviews and dive deeper into understanding what people are really saying. With features like sentiment analysis, ReviewPal helps you see whether reviews are positive, negative, or somewhere in between. By making the process faster and smarter, it simplifies the way you analyze and summarize feedback so you can get a clear picture of how customers feel about any product.
+**ReviewPal** is a user-friendly web scraping tool designed to streamline the process of gathering and analyzing product information from Amazon. Built with Flask, this tool enables you to scrape customer reviews (up to a specified number) and gain deeper insights into what people are saying. With built-in sentiment analysis, ReviewPal shows whether the reviews are positive, negative, or mixed. By automating the scraping and analysis process, it simplifies how you collect and summarize feedback, offering a clear understanding of customer sentiment for each product.
 
 ![ReviewPal Screenshot](web.png)
 
@@ -56,7 +56,8 @@ Navigate to `http://127.0.0.1:5000` in your browser to access the application.
 ## Usage
 1. **Input URL**: Enter the URL of an Amazon product in the input field on the homepage.
 2. **Scrape Reviews**: Click the "Scrape Website" button (or the search icon) to start scraping reviews and performing sentiment analysis.
-3. **Download Results**: After scraping, the application will provide a downloadable CSV file with product details and sentiment analysis.
+3. **Download Results**: After scraping, the application will provide a downloadable CSV file with product details and sentiment analysis. You can check the sample data format in the provided `GOODreviews.csv` file.
+
 
 ## Project Structure
 ```bash
