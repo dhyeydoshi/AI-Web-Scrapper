@@ -67,7 +67,6 @@ def analyze_sentiment(reviews):
     else:
         return "Highly Negative", avg_sentiment
 
-
 # Asynchronous function to fetch reviews for a single product
 async def fetch_reviews(session, product_name, product_link):
     if product_link == 'No Link':
@@ -170,7 +169,12 @@ async def fetch_page(session, url):
 
 # Function to run asyncio in a synchronous environment and scrape Amazon reviews
 def scrape_amazon_products_reviews(base_url, total_pages=1):
-    loop = asyncio.get_event_loop()
+    try:
+        loop = asyncio.get_event_loop()  # Get the current event loop
+    except RuntimeError:
+        loop = asyncio.new_event_loop()  # Create a new event loop if none exists
+        asyncio.set_event_loop(loop)     # Set it as the current loop
+    
     reviews = loop.run_until_complete(scrape_amazon_reviews(base_url, total_pages))
     return reviews
 
