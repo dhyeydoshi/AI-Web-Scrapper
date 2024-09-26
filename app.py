@@ -126,7 +126,7 @@ def parse_product_details(html):
     return products if products else None  # Return None if no products found
 
 # Asynchronous function to scrape product links and their reviews
-async def scrape_amazon_reviews(url, total_pages=1):
+async def scrape_amazon_reviews(url, total_pages):
     connector = TCPConnector(limit_per_host=5)
     async with aiohttp.ClientSession(connector=connector) as session:
         tasks = []
@@ -135,7 +135,8 @@ async def scrape_amazon_reviews(url, total_pages=1):
         for page in range(1, total_pages + 1):
             paginated_url = f"{url}&page={page}"
             tasks.append(fetch_page(session, paginated_url))
-
+        print(f"Total tasks Lenght: {len(tasks)}")
+        print(f"Total tasks: {tasks}")
         all_products = []
         results = await asyncio.gather(*tasks)
 
@@ -157,20 +158,42 @@ async def scrape_amazon_reviews(url, total_pages=1):
         return all_reviews
 
 # Define the fetch_page function
-async def fetch_page(session, url):
-    headers = {"User-Agent": get_random_user_agent()}
-    async with session.get(url, headers=headers) as response:
-        if response.status == 200:
-            html = await response.text()
-            product_details = parse_product_details(html)
-            return product_details if product_details else []
-        else:
-            print(f"Error: {response.status}")
-            return []
+async def fetch_page(session, url, max_retries=3):
+    retries = 0
+    while retries < max_retries:
+        try:
+            headers = {"User-Agent": get_random_user_agent()}
+            async with session.get(url, headers=headers) as response:
+                if response.status == 200:
+                    html = await response.text()
+                    product_details = parse_product_details(html)
+                    return product_details if product_details else []
+                elif response.status == 503:
+                    print(f"Failed to fetch page: {response.url}")
+                    print(f"Error 503: Service unavailable. Retrying... ({retries + 1}/{max_retries})")
+                    retries += 1
+                    await asyncio.sleep(2 ** retries)  # Backoff
+                else:
+                    print(f"Error: {response.status}")
+                    print(f"Failed to fetch page: {response.url}")
+                    return []
+        except aiohttp.ClientError as e:
+            print(f"HTTP Error: {e}")
+            retries += 1
+            await asyncio.sleep(2 ** retries)
+    return []
 
 # Function to run asyncio in a synchronous environment and scrape Amazon reviews
-def scrape_amazon_products_reviews(base_url, total_pages=1):
-    loop = asyncio.get_event_loop()
+def scrape_amazon_products_reviews(base_url, total_pages):
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_closed():  # Handle case where the event loop is closed
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+    except RuntimeError:  # No event loop in current thread
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
     reviews = loop.run_until_complete(scrape_amazon_reviews(base_url, total_pages))
     return reviews
 
