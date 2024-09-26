@@ -170,7 +170,15 @@ async def fetch_page(session, url):
 
 # Function to run asyncio in a synchronous environment and scrape Amazon reviews
 def scrape_amazon_products_reviews(base_url, total_pages=1):
-    loop = asyncio.get_event_loop()
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_closed():  # Handle case where the event loop is closed
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+    except RuntimeError:  # No event loop in current thread
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
     reviews = loop.run_until_complete(scrape_amazon_reviews(base_url, total_pages))
     return reviews
 
