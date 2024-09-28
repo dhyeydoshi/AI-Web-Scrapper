@@ -3,17 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Scrapper</title>
+    <title>ReviewPal</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <div class="container">
-        <h1>AI Scrapper</h1>
-        <form action="/scrape" method="POST">
-            <input type="text" id="url" name="url" placeholder="Enter the URL to scrape" required>
-            <button type="submit">Scrape Website</button>
-        </form>
-    </div>
+<div class="container">
+    <h1>ReviewPal</h1>
+    <form id="scrapeForm" action="/scrape" method="POST">
+        <input type="text" id="url" name="url" placeholder="Enter URL" required>
+        <input type="number" id="reviewCount" name="reviewCount" placeholder="Enter Pages" required>
+        <button type="submit">Scrape Website</button>
+    </form>
+    <!-- Error message container -->
+    <div id="errorMessage" class="error-message"></div>
+</div>
+
 
     <!-- Dots and lines -->
     <div class="dot dot1"></div>
