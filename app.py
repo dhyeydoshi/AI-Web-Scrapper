@@ -1,14 +1,13 @@
 import asyncio
-import aiohttp
 from flask import Flask, render_template, request, send_file
 from bs4 import BeautifulSoup
 import pandas as pd
-from aiohttp import TCPConnector
 import nest_asyncio
 import random
-from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer  # Using VADER
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 import re
 import time
+from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
 
 # Apply nested asyncio loop patch
 nest_asyncio.apply()
@@ -18,9 +17,13 @@ app = Flask(__name__)
 
 # User agents list for rotation to avoid detection
 USER_AGENTS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Gecko/20100101 Firefox/89.0"
+    # (Your list of user agents)
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)"
+    " Chrome/91.0.4472.124 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko)"
+    " Chrome/91.0.4472.124 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Gecko/20100101 Firefox/89.0",
+    # Add more user agents if needed
 ]
 
 # Initialize VADER sentiment analyzer
@@ -67,30 +70,28 @@ def analyze_sentiment(reviews):
     else:
         return "Highly Negative", avg_sentiment
 
-# Asynchronous function to fetch reviews for a single product
-async def fetch_reviews(session, product_name, product_link):
+# Asynchronous function to fetch reviews for a single product using Playwright
+async def fetch_reviews(playwright, product_name, product_link):
     if product_link == 'No Link':
         print(f"Skipping product without a valid link: {product_name}")
         return []
 
-    headers = {"User-Agent": get_random_user_agent()}
+    browser = await playwright.chromium.launch(headless=True)
+    page = await browser.new_page(user_agent=get_random_user_agent())
     print(f"Fetching reviews for: {product_name}")
 
-    async with session.get(product_link, headers=headers) as response:
-        if response.status == 200:
-            html = await response.text()
-            soup = BeautifulSoup(html, 'html.parser')
+    await page.goto(product_link)
+    content = await page.content()
+    soup = BeautifulSoup(content, 'html.parser')
 
-            # Locate and parse the reviews section from the product page
-            reviews = []
-            for review in soup.find_all('div', {'data-hook': 'review'}, limit=30):  # Limit to 30 reviews
-                review_text = review.find('span', {'data-hook': 'review-body'}).get_text(strip=True)
-                reviews.append(review_text)
+    # Locate and parse the reviews section from the product page
+    reviews = []
+    for review in soup.find_all('div', {'data-hook': 'review'}, limit=30):  # Limit to 30 reviews
+        review_text = review.find('span', {'data-hook': 'review-body'}).get_text(strip=True)
+        reviews.append(review_text)
 
-            return reviews if reviews else ['No Reviews']
-        else:
-            print(f"Failed to fetch reviews for {product_name}")
-            return ['No Reviews']
+    await browser.close()
+    return reviews if reviews else ['No Reviews']
 
 # Function to parse the HTML and extract product details
 def parse_product_details(html):
@@ -111,7 +112,7 @@ def parse_product_details(html):
         rating = rating.text.strip() if rating else "No Rating"
 
         # Product Link
-        product_link = product.find('a', {'class': 'a-link-normal'}, href=True)
+        product_link = product.find('a', {'class': 'a-link-normal s-no-outline'}, href=True)
         product_link = 'https://www.amazon.com' + product_link['href'] if product_link else 'No Link'
 
         # Append parsed product details
@@ -124,28 +125,75 @@ def parse_product_details(html):
 
     return products if products else None  # Return None if no products found
 
-# Asynchronous function to scrape product links and their reviews
+# Asynchronous function to scrape product links and their reviews using Playwright
 async def scrape_amazon_reviews(url, total_pages=1):
-    connector = TCPConnector(limit_per_host=5)
-    async with aiohttp.ClientSession(connector=connector) as session:
-        tasks = []
-
-        # First scrape product URLs from the search pages
-        for page in range(1, total_pages + 1):
-            paginated_url = f"{url}&page={page}"
-            tasks.append(fetch_page(session, paginated_url))
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(headless=False)
+        page = await browser.new_page(user_agent=get_random_user_agent())
 
         all_products = []
-        results = await asyncio.gather(*tasks)
+        current_page = 1
+        try:
+            await page.goto(url)
+            while current_page <= total_pages:
+                print(f"Scraping page: {current_page}")
 
-        for result in results:
-            if result:
-                all_products.extend(result)
+                # Wait for the product listings to load
+                try:
+                    await page.wait_for_selector('div.s-main-slot', timeout=15000)
+                except PlaywrightTimeoutError:
+                    print("Timeout while waiting for product listings to load.")
+                    break
 
+                # Check for CAPTCHA
+                if "Enter the characters you see below" in await page.content():
+                    print("Encountered CAPTCHA. Exiting.")
+                    break
+
+                html = await page.content()
+                product_details = parse_product_details(html)
+
+                if product_details:
+                    all_products.extend(product_details)
+                else:
+                    print(f"No products found on page {current_page}")
+                    break  # Exit the loop if no products are found
+
+                if current_page < total_pages:
+                    # Try to find the 'Next' button using various selectors
+                    next_page_button = await page.query_selector("//a[contains(@aria-label, 'Next')]")
+                    if not next_page_button:
+                        next_page_button = await page.query_selector("li.a-last a")
+                    if not next_page_button:
+                        next_page_button = await page.query_selector("a.s-pagination-next")
+
+                    if next_page_button:
+                        next_page_url = await next_page_button.get_attribute('href')
+                        if next_page_url:
+                            next_page_url = 'https://www.amazon.com' + next_page_url
+                            print(f"Navigating to next page: {next_page_url}")
+                            await asyncio.sleep(random.uniform(2, 5))  # Random delay
+                            await page.goto(next_page_url)
+                            current_page += 1
+                        else:
+                            print("No 'href' found for 'Next' button, ending pagination.")
+                            break
+                    else:
+                        print("No 'Next' button found, ending pagination.")
+                        break  # No more pages, exit the loop
+                else:
+                    print("Desired number of pages scraped.")
+                    break
+
+        except Exception as e:
+            print(f"An error occurred: {e}")
+        finally:
+            await browser.close()
+
+        # Now process the products and get reviews, as before
         all_reviews = []
-        # Now, for each product, visit the product page and extract reviews
         for product in all_products:
-            reviews = await fetch_reviews(session, product['Product Name'], product['Product Link'])
+            reviews = await fetch_reviews(playwright, product['Product Name'], product['Product Link'])
 
             # Perform sentiment analysis
             sentiment, score = analyze_sentiment(reviews)
@@ -155,48 +203,33 @@ async def scrape_amazon_reviews(url, total_pages=1):
 
         return all_reviews
 
-# Define the fetch_page function
-async def fetch_page(session, url):
-    headers = {"User-Agent": get_random_user_agent()}
-    async with session.get(url, headers=headers) as response:
-        if response.status == 200:
-            html = await response.text()
-            product_details = parse_product_details(html)
-            return product_details if product_details else []
-        else:
-            print(f"Error: {response.status}")
-            return []
-
 # Function to run asyncio in a synchronous environment and scrape Amazon reviews
 def scrape_amazon_products_reviews(base_url, total_pages=1):
-    try:
-        loop = asyncio.get_event_loop()  # Get the current event loop
-    except RuntimeError:
-        loop = asyncio.new_event_loop()  # Create a new event loop if none exists
-        asyncio.set_event_loop(loop)     # Set it as the current loop
-    
+    loop = asyncio.get_event_loop()
     reviews = loop.run_until_complete(scrape_amazon_reviews(base_url, total_pages))
     return reviews
 
+# HTML Form to input the number of pages to scrape
 @app.route('/')
 def index():
     return render_template('index.html')
 
+# Handling the scraping request and how many pages to scrape
 @app.route('/scrape', methods=['POST'])
 def scrape():
     url = request.form['url']
-    pages = int(request.form.get('pages', 1))
+    pages = int(request.form.get('pages', 1))  # Default is 1 page, or you can specify how many in the form
 
     if 'amazon.com' in url:
         reviews = scrape_amazon_products_reviews(url, total_pages=pages)
 
         # Save the results to a CSV file
         df = pd.DataFrame(reviews)
-        
+
         # Reorder columns to move Product Link after Product Name
         df = df[['Product Name', 'Product Link', 'Price', 'Rating', 'Summary Sentiment', 'Sentiment Score']]
-        
-        output_file = 'amazon_1000_products_with_sentiment.csv'
+
+        output_file = 'amazon_products_with_sentiment.csv'
         df.to_csv(output_file, index=False)
         return send_file(output_file, as_attachment=True, mimetype='text/csv')
     else:
