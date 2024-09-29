@@ -4,3 +4,4 @@ beautifulsoup4==4.9.3
 pandas==1.2.4
 nest_asyncio==1.5.1
 vaderSentiment==3.3.2
+playwright==1.12.3
