@@ -1,6 +1,8 @@
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 import random
 import re
+import string
+import html
 
 
 
@@ -24,11 +26,28 @@ def get_random_user_agent():
 
 # Function to clean the reviews text
 def clean_text(text):
-    # Replace encoded apostrophes and special characters with plain text equivalents
-    text = text.replace("&#39;", "'")  # Replacing encoded apostrophe
-    text = re.sub(r'[^\x00-\x7F]+', ' ', text)  # Remove non-ASCII characters
-    text = re.sub(r'\s+', ' ', text)  # Remove extra whitespaces
-    return text.strip()
+    text = re.sub(r'\s+', ' ', text)
+    # Trim leading and trailing whitespaces
+    text = text.strip()
+    # Remove HTML tags
+    text = re.sub(r'<.*?>', '', text)
+
+    text = re.sub(r'\[\[.*?\]\]', '', text)
+    text = text.replace('\/', '/')
+
+    # Remove URLs
+    text = re.sub(r'http\S+|www\S+', '', text)
+    text = re.sub(r'\\u2019', "'", text)
+    text = re.sub(r'\\u201c', '"', text)
+    text = re.sub(r'\\u201d', '"', text)
+    text = re.sub(r"\\u2013", "-", text)
+    text = re.sub(r'\\u200d', '', text)
+    pattern = rf'([{re.escape(string.punctuation)}])\1+'
+    text = re.sub(pattern, r'\1', text)
+
+    text = html.unescape(text)
+
+    return text
 
 # Updated function to perform sentiment analysis using VADER
 def analyze_sentiment(reviews):

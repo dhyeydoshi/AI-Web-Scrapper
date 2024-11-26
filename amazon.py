@@ -39,6 +39,7 @@ def parse_product_details(html):
     for product in soup.find_all('div', {'data-component-type': 's-search-result'}):
         # Product Name
         product_name = product.h2.text.strip() if product.h2 else "No Product Name"
+        data_asin = product.get('data-asin')
 
         # Price (whole and fractional)
         price_whole = product.find('span', {'class': 'a-price-whole'})
@@ -59,6 +60,7 @@ def parse_product_details(html):
             'Product Link': product_link,
             'Price': price,
             'Rating': rating,
+            'ASIN': data_asin
         })
 
     return products if products else None  # Return None if no products found
@@ -137,6 +139,7 @@ async def scrape_amazon_reviews(url, total_pages=1):
             sentiment, score = analyze_sentiment(reviews)
             product['Summary Sentiment'] = sentiment
             product['Sentiment Score'] = score
+            product['Reviews'] = reviews
             all_reviews.append(product)
 
         return all_reviews
